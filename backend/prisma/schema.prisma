@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id           String   @id @default(uuid()) 
+  cognitoSub   String   @unique              // Cognito user ID (sub)
+  email        String   @unique
+  phone        String?
+  name         String?
+  role         Role
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  managedProperties Property[]            @relation("ManagerProperties")
+  tenantProfile     TenantProfile?
+  applications      PropertyApplication[]
+}
+
+
+model Property {
+  id              String   @id @default(uuid())
+  name            String
+  address         String
+  rentAmount      Float
+  securityDeposit Float
+  bedrooms        Int
+  bathrooms       Int
+  squareFeet      Int?
+  description     String?
+  propertyType    String
+  status          String   @default("vacant")
+  managerId       String
+  manager         User     @relation("ManagerProperties", fields: [managerId], references: [id])
+  imageData       String?
+  imageUrl        String?
+  city            String
+  state           String
+  zipCode         String
+  amenities       String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenants             TenantProfile[]
+  maintenanceRequests MaintenanceRequest[]
+
+  applications PropertyApplication[]
+}
+
+model PropertyApplication {
+  id         String  @id @default(uuid())
+  propertyId String
+  userId     String? // 🔑 ADD THIS
+
+  tenantName String
+  email      String
+  phone      String?
+  message    String?
+
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+  user     User?    @relation(fields: [userId], references: [id])
+}
+
+model TenantProfile {
+  id                  String               @id @default(uuid())
+  userId              String               @unique
+  propertyId          String
+  rentAmount          Decimal
+  rentDueDay          Int
+  createdAt           DateTime             @default(now())
+  maintenanceRequests MaintenanceRequest[]
+  payments            Payment[]
+  property            Property             @relation(fields: [propertyId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  tenantId  String
+  amount    Decimal
+  status    PaymentStatus
+  reference String        @unique
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  tenant    TenantProfile @relation(fields: [tenantId], references: [id])
+}
+
+model MaintenanceRequest {
+  id          String            @id @default(uuid())
+  tenantId    String
+  propertyId  String
+  title       String
+  description String
+  status      MaintenanceStatus @default(OPEN)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  files       File[]
+  property    Property          @relation(fields: [propertyId], references: [id])
+  tenant      TenantProfile     @relation(fields: [tenantId], references: [id])
+}
+
+model File {
+  id                 String              @id @default(uuid())
+  url                String
+  key                String
+  uploadedAt         DateTime            @default(now())
+  requestId          String?
+  maintenanceRequest MaintenanceRequest? @relation(fields: [requestId], references: [id])
+}
+
+enum Role {
+  TENANT
+  MANAGER
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
